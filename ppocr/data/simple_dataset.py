@@ -131,35 +131,43 @@ class SimpleDataSet(Dataset):
                     continue
             ext_data.append(data)
         return ext_data
-
     def __getitem__(self, idx):
         file_idx = self.data_idx_order_list[idx]
         data_line = self.data_lines[file_idx]
         try:
             data_line = data_line.decode("utf-8")
             substr = data_line.strip("\n").split(self.delimiter)
-            # file_name = substr[0]
-            file_and_label = substr[0].split(' ', 1)
-            file_name = file_and_label[0]
+            if len(substr) != 2:
+                raise Exception(f"Invalid data format in line: {data_line}")
+                
+            file_name = substr[0]  # Get the image path
+            label = substr[1]      # Get the JSON label data
+            
+            # Remove any extra whitespace
+            file_name = file_name.strip()
+            label = label.strip()
+            
             file_name = self._try_parse_filename_list(file_name)
-            label = file_and_label[1]
-            # label = substr[1]
             img_path = os.path.join(self.data_dir, file_name)
             data = {"img_path": img_path, "label": label}
+            
             if not os.path.exists(img_path):
                 raise Exception("{} does not exist!".format(img_path))
+                
             with open(data["img_path"], "rb") as f:
                 img = f.read()
                 data["image"] = img
+            
             data["ext_data"] = self.get_ext_data()
             outs = transform(data, self.ops)
-        except:
+        except Exception as e:
             self.logger.error(
                 "When parsing line {}, error happened with msg: {}".format(
                     data_line, traceback.format_exc()
                 )
             )
             outs = None
+            
         if outs is None:
             # during evaluation, we should fix the idx to get same results for many times of evaluation.
             rnd_idx = (
@@ -169,6 +177,44 @@ class SimpleDataSet(Dataset):
             )
             return self.__getitem__(rnd_idx)
         return outs
+
+    # def __getitem__(self, idx):
+    #     file_idx = self.data_idx_order_list[idx]
+    #     data_line = self.data_lines[file_idx]
+    #     try:
+    #         data_line = data_line.decode("utf-8")
+    #         substr = data_line.strip("\n").split(self.delimiter)
+    #         # file_name = substr[0]
+    #         file_and_label = substr[0].split(' ', 1)
+    #         file_name = file_and_label[0]
+    #         file_name = self._try_parse_filename_list(file_name)
+    #         label = file_and_label[1]
+    #         # label = substr[1]
+    #         img_path = os.path.join(self.data_dir, file_name)
+    #         data = {"img_path": img_path, "label": label}
+    #         if not os.path.exists(img_path):
+    #             raise Exception("{} does not exist!".format(img_path))
+    #         with open(data["img_path"], "rb") as f:
+    #             img = f.read()
+    #             data["image"] = img
+    #         data["ext_data"] = self.get_ext_data()
+    #         outs = transform(data, self.ops)
+    #     except:
+    #         self.logger.error(
+    #             "When parsing line {}, error happened with msg: {}".format(
+    #                 data_line, traceback.format_exc()
+    #             )
+    #         )
+    #         outs = None
+    #     if outs is None:
+    #         # during evaluation, we should fix the idx to get same results for many times of evaluation.
+    #         rnd_idx = (
+    #             np.random.randint(self.__len__())
+    #             if self.mode == "train"
+    #             else (idx + 1) % self.__len__()
+    #         )
+    #         return self.__getitem__(rnd_idx)
+    #     return outs
 
     def __len__(self):
         return len(self.data_idx_order_list)
